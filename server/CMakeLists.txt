@@ -1,2 +1,2 @@
-add_executable(server main.cpp)
+add_executable(server TCP_MultiThread_main.cpp)
 target_link_libraries(server ws2_32)
