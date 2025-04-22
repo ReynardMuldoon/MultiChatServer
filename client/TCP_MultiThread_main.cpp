@@ -7,11 +7,12 @@
 #pragma comment(lib, "ws2_32.lib")
 
 void ReceiveMessages(SOCKET sock) {
-    char buffer[512];
-    int len;
-    while ((len = recv(sock, buffer, sizeof(buffer), 0)) > 0) {
-        std::string msg(buffer, len);
-        std::cout << "[Server]: " << msg << std::endl;
+    char buffer[1024];
+    int bytesReceived;
+    while ((bytesReceived = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
+        buffer[bytesReceived] = '\0';
+        // std::string msg(buffer, bytesReceived);
+        std::cout << buffer << std::endl;
     }
 }
 
@@ -20,7 +21,6 @@ int main() {
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 
     SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
-
     sockaddr_in serverAddr = {};
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(9000);
@@ -30,6 +30,11 @@ int main() {
         std::cerr << "Failed to connect to server." << std::endl;
         return 1;
     }
+
+    std::string nickname;
+    std::cout << "Enter your nickname: ";
+    std::getline(std::cin, nickname);
+    send(sock, nickname.c_str(), nickname.size(), 0);
 
     std::thread(ReceiveMessages, sock).detach();
 
