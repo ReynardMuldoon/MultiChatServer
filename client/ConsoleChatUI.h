@@ -32,4 +32,5 @@ private:
 
     void MoveCursorToInputLine();      // 입력 라인으로 커서 이동
     void ClearInputLine();             // 입력 라인 클리어
+    void UpdateScreenSize();            // 콘솔 창 크기 업데이트 
 };

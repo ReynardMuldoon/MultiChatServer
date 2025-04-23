@@ -5,10 +5,7 @@
 
 ConsoleChatUI::ConsoleChatUI() {
     hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    GetConsoleScreenBufferInfo(hConsole, &csbi);
-    screenHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-    screenWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    UpdateScreenSize();
     inputPos = { 0, static_cast<SHORT>(screenHeight - 1) };
 }
 
@@ -20,7 +17,9 @@ void ConsoleChatUI::Init() {
 void ConsoleChatUI::PrintMessage(const std::string& msg) {
     Lock();
 
-    // 변경 이유: 입력 중에도 메시지가 오면 출력해야 하므로 입력 내용을 백업 후 출력
+    // 콘솔 크기를 실시간 반영하기 위해 매번 업데이트 
+    UpdateScreenSize();
+    // 입력 중에도 메시지가 오면 출력해야 하므로 입력 내용을 백업 후 출력
     std::string savedInput = currentInput;
 
     // 메시지를 저장하고 화면에 보이는 메시지 개수를 유지하기 위해 오래된 메시지 제거
@@ -29,24 +28,24 @@ void ConsoleChatUI::PrintMessage(const std::string& msg) {
         messages.erase(messages.begin());
     }
 
-    // 변경 이유: 전체 출력 라인을 다시 그려 메시지를 일괄적으로 갱신
+    // 전체 출력 라인을 다시 그려 메시지를 일괄적으로 갱신
     for (int i = 0; i < screenHeight - 1; ++i) {
         COORD pos = { 0, static_cast<SHORT>(i) };
         SetConsoleCursorPosition(hConsole, pos);
         DWORD written;
         std::string line = (i < messages.size()) ? messages[i] : "";
-        line.resize(screenWidth, ' '); // 변경 이유: 기존 줄의 잔여 문자 제거
+        line.resize(screenWidth, ' '); // 기존 줄의 잔여 문자 제거
         WriteConsoleA(hConsole, line.c_str(), screenWidth, &written, nullptr);
     }
 
-    // 변경 이유: 백업했던 입력을 복구하여 사용자 입력 경험 유지
+    // 백업했던 입력을 복구하여 사용자 입력 경험 유지
     SetInput(savedInput);
     RefreshInputLine();
     Unlock();
 }
 
 void ConsoleChatUI::RefreshInputLine() {
-    ClearInputLine(); // 변경 이유: 기존 입력 줄의 잔여 문자를 지우기 위함
+    ClearInputLine(); // 기존 입력 줄의 잔여 문자를 지우기 위함
     MoveCursorToInputLine();
     DWORD written;
     WriteConsoleA(hConsole, currentInput.c_str(), currentInput.size(), &written, nullptr);
@@ -65,7 +64,7 @@ void ConsoleChatUI::MoveCursorToInputLine() {
 }
 
 void ConsoleChatUI::ClearInputLine() {
-    // 변경 이유: 커서를 입력 라인으로 이동시키고 해당 라인을 공백으로 덮어 기존 입력 제거
+    // 커서를 입력 라인으로 이동시키고 해당 라인을 공백으로 덮어 기존 입력 제거
     COORD pos = inputPos;
     SetConsoleCursorPosition(hConsole, pos);
     DWORD written;
@@ -80,4 +79,12 @@ void ConsoleChatUI::Lock() {
 
 void ConsoleChatUI::Unlock() {
     consoleMutex.unlock();
+}
+
+// 콘솔 화면 크기를 업데이트하는 함수
+void ConsoleChatUI::UpdateScreenSize() {
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(hConsole, &csbi);
+    screenHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+    screenWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
 }

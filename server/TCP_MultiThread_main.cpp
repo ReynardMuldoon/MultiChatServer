@@ -62,7 +62,7 @@ void HandleClient(SOCKET clientSock) {
 
     std::string leaveMsg = nickname + " has left the chat.\n";
     Broadcast(leaveMsg, clientSock);
-    std::cout << leaveMsg << std::endl;
+    std::cout << leaveMsg;
 
     closesocket(clientSock);
 }
