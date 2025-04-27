@@ -48,7 +48,8 @@ void ConsoleChatUI::RefreshInputLine() {
     ClearInputLine(); // 기존 입력 줄의 잔여 문자를 지우기 위함
     MoveCursorToInputLine();
     DWORD written;
-    WriteConsoleA(hConsole, currentInput.c_str(), currentInput.size(), &written, nullptr);
+    std::string printString = "> " + currentInput;  // 입력을 위한 "> " 문자열 함께 출력 
+    WriteConsoleA(hConsole, printString.c_str(), printString.size(), &written, nullptr);
 }
 
 void ConsoleChatUI::SetInput(const std::string& input) {
@@ -87,4 +88,26 @@ void ConsoleChatUI::UpdateScreenSize() {
     GetConsoleScreenBufferInfo(hConsole, &csbi);
     screenHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
     screenWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    inputPos = { 0, static_cast<SHORT>(screenHeight - 1) };
+}
+
+// 사용자 키보드 입력을 추적하고 표시하는 함수
+void ConsoleChatUI::ProcessInputChar(char ch) {
+    if (ch == '\b') {
+        if (!currentInput.empty()) {
+            currentInput.pop_back();
+        }
+    }
+    else if (isprint(static_cast<unsigned char>(ch))) {
+        currentInput.push_back(ch);
+    }
+    RefreshInputLine();
+}
+
+// 입력 완료 시 currentInput을 반환하고 초기화
+std::string ConsoleChatUI::ConsumeInput() {
+    std::string result = currentInput;
+    currentInput.clear();
+    RefreshInputLine();
+    return result;
 }

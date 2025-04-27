@@ -19,6 +19,8 @@ public:
 
     void Lock();                        // 출력 동기화 잠금
     void Unlock();                      // 출력 동기화 해제
+    void ProcessInputChar(char ch);     // 사용자 키보드 입력을 추적하고 표시
+    std::string ConsumeInput();         // 입력 완료 시 currentInput을 반환하고 초기화
 
 private:
     HANDLE hConsole;                   // 콘솔 핸들

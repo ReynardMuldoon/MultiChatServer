@@ -4,6 +4,7 @@
 #include <string>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <conio.h>
 #include "ConsoleChatUI.h"
 
 #pragma comment(lib, "ws2_32.lib")
@@ -80,16 +81,22 @@ int main() {
 
     std::thread recvThread(ReceiveMessages, sock);
 
-    while (running) {
-        std::string input;
-        std::getline(std::cin, input);
-        if (input == "/quit") {
-            running = false;
-            break;
-        }
+    std::cout << "> ";
 
-        send(sock, input.c_str(), input.length(), 0);
-        ui.PrintMessage("[나]: " + input);
+    while (running) {
+        if (_kbhit()) {
+            char ch = _getch();
+            if (ch == '\r') { // 엔터
+                std::string message = ui.ConsumeInput();
+                if (!message.empty()) {
+                    send(sock, message.c_str(), message.size(), 0);
+                    ui.PrintMessage("[나]: " + message);
+                }
+            }
+            else {
+                ui.ProcessInputChar(ch);
+            }
+        }
     }
 
     closesocket(sock);
