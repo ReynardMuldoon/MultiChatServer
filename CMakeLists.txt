@@ -5,4 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_subdirectory(server)
-add_subdirectory(client)
+add_subdirectory(multithreadClient)
+add_subdirectory(selectClient)
+add_subdirectory(iocpClient)

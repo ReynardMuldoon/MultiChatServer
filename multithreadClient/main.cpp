@@ -1,11 +1,10 @@
-// client/TCP_MultiThread_main.cpp
 #include <iostream>
 #include <thread>
 #include <string>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <conio.h>
-#include "ConsoleChatUI.h"
+#include "../client/ConsoleChatUI.h"
 
 #pragma comment(lib, "ws2_32.lib")
 

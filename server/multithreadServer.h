@@ -67,7 +67,7 @@ void HandleClient(SOCKET clientSock) {
     closesocket(clientSock);
 }
 
-int main() {
+void multithreadServer() {
     WSADATA wsaData;
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 
@@ -88,5 +88,4 @@ int main() {
 
     closesocket(listenSock);
     WSACleanup();
-    return 0;
 }
