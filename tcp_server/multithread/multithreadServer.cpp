@@ -1,19 +1,19 @@
 #include "multithreadServer.h"
 
-TCPMultithreadServer::TCPMultithreadServer(int port) : TCPServer(port) { }
+TCPMultithreadServer::TCPMultithreadServer(int port)  { }
 
 TCPMultithreadServer::~TCPMultithreadServer() { }
 
 void TCPMultithreadServer::Run()
-{
+{/*
     InitWinsock();
-    SetupServerSocket();
+    SetupServerSocket();*/
 
     std::cout << "TCP Multithread Server listening on port " << port << "...\n";
 
     while (true) {
         SOCKET clientSock = accept(serverSocket, nullptr, nullptr);
-        std::thread(TCPMultithreadServer::HandleClient, clientSock).detach();
+//        std::thread(TCPMultithreadServer::HandleClient, clientSock).detach();
     }
 }
 
@@ -25,9 +25,9 @@ void TCPMultithreadServer::HandleClient(SOCKET clientSocket)
         std::lock_guard<std::mutex> lock(clients_mutex);
         clients.push_back(clientSocket);
         clientNames[clientSocket] = nickname;
-    }
+    }/*
 
-    SendJoinMsg(clientSocket);
+    SendJoinMsg(clientSocket);*/
 
     HandleClientMessage(clientSocket);
 
@@ -46,7 +46,7 @@ void TCPMultithreadServer::RemoveClient(SOCKET clientSocket)
 }
 
 void TCPMultithreadServer::HandleNewConnection()
-{
+{/*
     std::string nickname = GetNickname(clientSocket);
 
     {
@@ -55,7 +55,7 @@ void TCPMultithreadServer::HandleNewConnection()
         clientNames[clientSocket] = nickname;
     }
 
-    SendJoinMsg(clientSocket);
+    SendJoinMsg(clientSocket);*/
 }
 
 void TCPMultithreadServer::HandleClientMessage(SOCKET clientSocket)

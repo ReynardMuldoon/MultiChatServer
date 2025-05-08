@@ -3,15 +3,55 @@
 #include <iostream>
 #include <algorithm>
 
-TCPSelectServer::~TCPSelectServer() { }
+TCPSelectServer::TCPSelectServer()
+{
+    FD_ZERO(&masterSet);
+}
+
+TCPSelectServer::~TCPSelectServer() 
+{ 
+    Shutdown();
+}
+
+
+bool TCPSelectServer::Init(int port) {
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        std::cerr << "WSAStartup 실패" << std::endl;
+        return false;
+    }
+
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == INVALID_SOCKET) {
+        std::cerr << "소켓 생성 실패" << std::endl;
+        return false;
+    }
+
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port);
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        std::cerr << "bind 실패" << std::endl;
+        closesocket(serverSocket);
+        return false;
+    }
+
+    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
+        std::cerr << "listen 실패" << std::endl;
+        closesocket(serverSocket);
+        return false;
+    }
+
+    FD_SET(serverSocket, &masterSet);
+
+    std::cout << "서버 초기화 완료, 포트 " << port << "에서 대기 중..." << std::endl;
+    return true;
+}
 
 
 void TCPSelectServer::Run() {
-    FD_ZERO(&masterSet);
-    FD_SET(serverSocket, &masterSet);
-
-    std::cout << "TCP Select Server listening on port " << port << "...\n";
-
     while (true) {
         fd_set copySet = masterSet;
 
@@ -30,11 +70,26 @@ void TCPSelectServer::Run() {
     }
 }
 
+void TCPSelectServer::Shutdown() {
+    for (int i = 0; i <= masterSet.fd_count; ++i) {
+        if (FD_ISSET(i, &masterSet)) {
+            closesocket(i);
+        }
+    }
+    WSACleanup();
+    std::cout << "서버 종료 완료" << std::endl;
+}
+
 void TCPSelectServer::HandleNewConnection() {
     SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
 
     std::string nickname = GetNickname(clientSocket);
     clientNames[clientSocket] = nickname;
+
+    // 해당 클라이언트 접속 알리기 
+    std::string joinMsg = clientNames[clientSocket] + " has joined the chat.\n";
+    Broadcast(joinMsg, clientSocket);
+    std::cout << joinMsg;
 
     FD_SET(clientSocket, &masterSet);
 }
@@ -58,7 +113,6 @@ void TCPSelectServer::HandleClientMessage(SOCKET clientSocket) {
 
 void TCPSelectServer::RemoveClient(SOCKET clientSocket) {
     TCPServer::RemoveClient(clientSocket);
-    clientNames.erase(clientSocket);
 
     FD_CLR(clientSocket, &masterSet);
 }

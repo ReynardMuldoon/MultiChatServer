@@ -32,7 +32,6 @@ int main(void)
 
 	if (server->Init(port))
 		server->Run();
-	server->Shutdown();
 
 	return 0;
 }

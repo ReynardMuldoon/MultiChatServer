@@ -1,12 +1,6 @@
 #include "TCPServer.h"
 #include <iostream>
 
-TCPServer::~TCPServer()
-{
-    closesocket(serverSocket);
-    WSACleanup();
-}
-
 bool TCPServer::Init(int port)
 {
     WSADATA wsaData;
@@ -27,7 +21,6 @@ bool TCPServer::Init(int port)
 
 void TCPServer::Shutdown()
 {
-
     closesocket(serverSocket);
     WSACleanup();
 }
@@ -58,5 +51,6 @@ void TCPServer::RemoveClient(SOCKET clientSocket)
     Broadcast(leaveMsg, clientSocket);
     std::cout << leaveMsg;
 
+    clientNames.erase(clientSocket);
     closesocket(clientSocket);
 }

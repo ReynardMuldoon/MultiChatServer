@@ -18,5 +18,5 @@ protected:
 
 	std::string GetNickname(SOCKET clientSocket);
 	virtual void Broadcast(const std::string& message, SOCKET sender) = 0;
-	virtual void RemoveClient(SOCKET clientSocket) = 0;
+	virtual void RemoveClient(SOCKET clientSocket);
 };

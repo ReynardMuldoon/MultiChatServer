@@ -78,6 +78,7 @@ int main() {
     std::cout << "닉네임을 입력하세요: ";
     std::getline(std::cin, nickname);
     send(sock, nickname.c_str(), nickname.length(), 0);
+    ui.PrintMessage(nickname + " has joined the chat.\n");   // 접속 알림 
 
     std::thread recvThread(ReceiveMessages, sock);
 
@@ -90,7 +91,7 @@ int main() {
                 std::string message = ui.ConsumeInput();
                 if (!message.empty()) {
                     send(sock, message.c_str(), message.size(), 0);
-                    ui.PrintMessage("[나]: " + message);
+                    ui.PrintMessage("[" + nickname + " ]: " + message);
                 }
             }
             else {
