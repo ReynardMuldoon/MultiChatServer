@@ -3,37 +3,14 @@
 #include <iostream>
 #include <algorithm>
 
-TCPSelectServer::TCPSelectServer(int port) : port(port), serverSocket(INVALID_SOCKET) {}
+TCPSelectServer::~TCPSelectServer() { }
 
-TCPSelectServer::~TCPSelectServer() {
-    closesocket(serverSocket);
-    WSACleanup();
-}
-
-void TCPSelectServer::InitWinsock() {
-    WSADATA wsaData;
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
-}
-
-void TCPSelectServer::SetupServerSocket() {
-    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(port);
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
-
-    bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
-    listen(serverSocket, SOMAXCONN);
-}
 
 void TCPSelectServer::Run() {
-    InitWinsock();
-    SetupServerSocket();
-
     FD_ZERO(&masterSet);
     FD_SET(serverSocket, &masterSet);
 
-    std::cout << "Server listening on port " << port << "...\n";
+    std::cout << "TCP Select Server listening on port " << port << "...\n";
 
     while (true) {
         fd_set copySet = masterSet;
@@ -56,24 +33,8 @@ void TCPSelectServer::Run() {
 void TCPSelectServer::HandleNewConnection() {
     SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
 
-    char buffer[1024];
-    int bytesReceived;
-
-    // 첫 번째 메시지는 닉네임 
-    bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
-    if (bytesReceived <= 0) {
-        closesocket(clientSocket);
-        return;
-    }
-
-    buffer[bytesReceived] = '\0';
-    std::string nickname = buffer;
-    
+    std::string nickname = GetNickname(clientSocket);
     clientNames[clientSocket] = nickname;
-
-    std::string joinMsg = nickname + " has joined the chat.\n";
-    Broadcast(joinMsg, clientSocket);
-    std::cout << joinMsg;
 
     FD_SET(clientSocket, &masterSet);
 }
@@ -96,14 +57,9 @@ void TCPSelectServer::HandleClientMessage(SOCKET clientSocket) {
 }
 
 void TCPSelectServer::RemoveClient(SOCKET clientSocket) {
-    // 해당 클라이언트 접속 종료 알리기 
-    std::string leaveMsg = clientNames[clientSocket] + " has left the chat.\n";
-    Broadcast(leaveMsg, clientSocket);
-    std::cout << leaveMsg;
-
+    TCPServer::RemoveClient(clientSocket);
     clientNames.erase(clientSocket);
 
-    closesocket(clientSocket);
     FD_CLR(clientSocket, &masterSet);
 }
 

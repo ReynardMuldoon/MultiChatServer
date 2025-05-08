@@ -1,0 +1,2 @@
+add_executable(tcp_server "main.cpp" "multithread/multithreadServer.h" "select/selectServer.h" "iocp/iocpServer.h" "poll/pollServer.h" "select/selectServer.cpp" "TCPServer.h" "TCPServer.cpp" "multithread/multithreadServer.cpp")
+target_link_libraries(tcp_server ws2_32)

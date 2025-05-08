@@ -1,28 +1,38 @@
 #pragma comment(lib, "ws2_32.lib")
+
 #include <iostream>
-#include "multithreadServer.h";
-#include "selectServer.h";
-#include "iocpServer.h";
+#include "multithread/multithreadServer.h";
+#include "select/selectServer.h";
+#include "poll/pollServer.h"
+#include "iocp/iocpServer.h";
+
+const int port = 9000;
 
 int selectVersion(void);
 
 int main(void)
 {
 	int choice = selectVersion();
-	TCPSelectServer server(9000);
+	std::shared_ptr<TCPServer> server;
 
 	switch (choice)
 	{
 		case 1:
-			multithreadServer();
+			server = std::shared_ptr<TCPServer>(new TCPMultithreadServer(9000));
 			break;
 		case 2:
-			server.Run();
+			server = std::shared_ptr<TCPServer>(new TCPSelectServer());
 			break;
 		case 3:
+			pollServer();
+		case 4:
 			iocpServer();
 			break;
 	}
+
+	if (server->Init(port))
+		server->Run();
+	server->Shutdown();
 
 	return 0;
 }
