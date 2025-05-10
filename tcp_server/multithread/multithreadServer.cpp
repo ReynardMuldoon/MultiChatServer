@@ -1,20 +1,45 @@
 #include "multithreadServer.h"
 
-TCPMultithreadServer::TCPMultithreadServer(int port)  { }
+TCPMultithreadServer::TCPMultithreadServer()  
+{ 
 
-TCPMultithreadServer::~TCPMultithreadServer() { }
+}
+
+TCPMultithreadServer::~TCPMultithreadServer() 
+{ 
+    Shutdown();
+}
+
+bool TCPMultithreadServer::Init(int port)
+{
+    TCPServer::Init(port);
+
+    std::cout << "MULTITHREAD 서버 초기화 완료, 포트 " << port << "에서 대기 중..." << std::endl;
+    return true;
+}
 
 void TCPMultithreadServer::Run()
-{/*
-    InitWinsock();
-    SetupServerSocket();*/
-
-    std::cout << "TCP Multithread Server listening on port " << port << "...\n";
-
-    while (true) {
+{
+    while (true) 
+    {
         SOCKET clientSock = accept(serverSocket, nullptr, nullptr);
-//        std::thread(TCPMultithreadServer::HandleClient, clientSock).detach();
+        std::thread(HandleClient, clientSock).detach();
     }
+}
+
+void TCPMultithreadServer::Shutdown()
+{
+    {
+        std::lock_guard<std::mutex> lock(clients_mutex);
+
+        for (int i = 0; i < clients.size(); i++)
+        {
+            closesocket(clients[i]);
+        }
+    }
+
+    WSACleanup();
+    std::cout << "서버 종료 완료" << std::endl;
 }
 
 void TCPMultithreadServer::HandleClient(SOCKET clientSocket)
@@ -25,57 +50,50 @@ void TCPMultithreadServer::HandleClient(SOCKET clientSocket)
         std::lock_guard<std::mutex> lock(clients_mutex);
         clients.push_back(clientSocket);
         clientNames[clientSocket] = nickname;
-    }/*
+    }
 
-    SendJoinMsg(clientSocket);*/
+    std::string joinMsg = nickname + " has joined the chat.\n";
+    Broadcast(joinMsg, clientSocket);
+    std::cout << joinMsg;
 
-    HandleClientMessage(clientSocket);
+    char buffer[1024];
+    int bytesReceived;
+
+    while ((bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0)) > 0) 
+    {
+        buffer[bytesReceived] = '\0';
+        std::string msg = "[" + nickname + "]: " + buffer; 
+        Broadcast(msg, clientSocket);
+        std::cout << msg << std::endl;
+    }
 
     RemoveClient(clientSocket);
 }
 
 void TCPMultithreadServer::RemoveClient(SOCKET clientSocket)
 {
-    TCPServer::RemoveClient(clientSocket);
-
+    std::string nickname;
     {
         std::lock_guard<std::mutex> lock(clients_mutex);
+        nickname = clientNames[clientSocket];
         clients.erase(std::remove(clients.begin(), clients.end(), clientSocket), clients.end());
         clientNames.erase(clientSocket);
     }
-}
 
-void TCPMultithreadServer::HandleNewConnection()
-{/*
-    std::string nickname = GetNickname(clientSocket);
+    std::string leaveMsg = nickname + " has left the chat.\n";
+    Broadcast(leaveMsg, clientSocket);
+    std::cout << leaveMsg;
 
-    {
-        std::lock_guard<std::mutex> lock(clients_mutex);
-        clients.push_back(clientSocket);
-        clientNames[clientSocket] = nickname;
-    }
-
-    SendJoinMsg(clientSocket);*/
-}
-
-void TCPMultithreadServer::HandleClientMessage(SOCKET clientSocket)
-{
-    int bytesReceived;
-    char buffer[1024];
-
-    while ((bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0)) > 0) {
-        buffer[bytesReceived] = '\0';
-        std::string msg = "[" + clientNames[clientSocket] + "]: " + buffer;
-        Broadcast(msg, clientSocket);
-        std::cout << msg << std::endl;
-    }
+    closesocket(clientSocket);
 }
 
 void TCPMultithreadServer::Broadcast(const std::string& message, SOCKET sender)
 {
     std::lock_guard<std::mutex> lock(clients_mutex);
-    for (SOCKET client : clients) {
-        if (client != sender) {
+    for (SOCKET client : clients) 
+    {
+        if (client != sender) 
+        {
             send(client, message.c_str(), static_cast<int>(message.size()), 0);
         }
     }

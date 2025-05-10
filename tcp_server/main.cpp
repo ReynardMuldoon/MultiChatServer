@@ -18,7 +18,7 @@ int main(void)
 	switch (choice)
 	{
 		case 1:
-			server = std::shared_ptr<TCPServer>(new TCPMultithreadServer(9000));
+			server = std::shared_ptr<TCPServer>(new TCPMultithreadServer());
 			break;
 		case 2:
 			server = std::shared_ptr<TCPServer>(new TCPSelectServer());
