@@ -18,8 +18,9 @@ public:
 private:
     fd_set masterSet;
 
+    void HandleNewConnection();
+    void HandleClientMessage(SOCKET clientSocket);
+
     virtual void RemoveClient(SOCKET clientSocket);
-    virtual void HandleNewConnection();
-    virtual void HandleClientMessage(SOCKET clientSocket);
     virtual void Broadcast(const std::string& message, SOCKET sender);
 };

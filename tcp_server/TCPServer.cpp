@@ -4,17 +4,37 @@
 bool TCPServer::Init(int port)
 {
     WSADATA wsaData;
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) 
+    {
+        std::cerr << "WSAStartup 실패" << std::endl;
+        return false;
+    }
 
-    this->port = port;
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == INVALID_SOCKET) 
+    {
+        std::cerr << "소켓 생성 실패" << std::endl;
+        return false;
+    }
+
     sockaddr_in serverAddr{};
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(port);
     serverAddr.sin_addr.s_addr = INADDR_ANY;
 
-    bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
-    listen(serverSocket, SOMAXCONN);
+    if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) 
+    {
+        std::cerr << "bind 실패" << std::endl;
+        closesocket(serverSocket);
+        return false;
+    }
+
+    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) 
+    {
+        std::cerr << "listen 실패" << std::endl;
+        closesocket(serverSocket);
+        return false;
+    }
 
     return true;
 }
@@ -32,7 +52,8 @@ std::string TCPServer::GetNickname(SOCKET clientSocket)
 
     // 첫 번째 메시지는 닉네임 
     bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
-    if (bytesReceived <= 0) {
+    if (bytesReceived <= 0) 
+    {
         closesocket(clientSocket);
         return "";
     }
