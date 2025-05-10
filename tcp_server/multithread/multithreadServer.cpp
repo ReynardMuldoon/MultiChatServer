@@ -22,8 +22,8 @@ void TCPMultithreadServer::Run()
 {
     while (true) 
     {
-        SOCKET clientSock = accept(serverSocket, nullptr, nullptr);
-        std::thread(HandleClient, clientSock).detach();
+        SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
+        std::thread([this, clientSocket]() { HandleClient(clientSocket); }).detach();
     }
 }
 
