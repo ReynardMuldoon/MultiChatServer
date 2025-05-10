@@ -82,8 +82,6 @@ int main() {
 
     std::thread recvThread(ReceiveMessages, sock);
 
-    std::cout << "> ";
-
     while (running) {
         if (_kbhit()) {
             char ch = _getch();
