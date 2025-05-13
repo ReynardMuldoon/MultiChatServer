@@ -17,6 +17,8 @@ bool TCPServer::Init(int port)
         return false;
     }
 
+    this->port = port;
+
     sockaddr_in serverAddr{};
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(port);

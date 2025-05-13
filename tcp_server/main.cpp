@@ -10,6 +10,21 @@ const int port = 9000;
 
 int selectVersion(void);
 
+std::shared_ptr<TCPServer> server;
+
+BOOL WINAPI ConsoleHandler(DWORD signal) {
+	if (signal == CTRL_C_EVENT || signal == CTRL_CLOSE_EVENT ||
+		signal == CTRL_LOGOFF_EVENT || signal == CTRL_SHUTDOWN_EVENT)
+	{
+		std::cout << "\n[서버 종료 신호 수신됨. 자원 해제 중...]\n";
+		if (tcpClient) {
+			tcpClient->Shutdown();  // 명시적 자원 해제
+		}
+		return TRUE; // 신호 처리 완료
+	}
+	return FALSE;
+}
+
 int main(void)
 {
 	int choice = selectVersion();
@@ -24,7 +39,9 @@ int main(void)
 			server = std::shared_ptr<TCPServer>(new TCPSelectServer());
 			break;
 		case 3:
-			pollServer();
+			server = std::shared_ptr<TCPServer>(new TCPPollServer());
+			// pollServer();
+			break;
 		case 4:
 			iocpServer();
 			break;
