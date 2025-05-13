@@ -17,8 +17,8 @@ BOOL WINAPI ConsoleHandler(DWORD signal) {
 		signal == CTRL_LOGOFF_EVENT || signal == CTRL_SHUTDOWN_EVENT)
 	{
 		std::cout << "\n[서버 종료 신호 수신됨. 자원 해제 중...]\n";
-		if (tcpClient) {
-			tcpClient->Shutdown();  // 명시적 자원 해제
+		if (server) {
+			server->Shutdown();  // 명시적 자원 해제
 		}
 		return TRUE; // 신호 처리 완료
 	}
@@ -27,20 +27,25 @@ BOOL WINAPI ConsoleHandler(DWORD signal) {
 
 int main(void)
 {
+	// 종료 핸들러 등록
+	if (!SetConsoleCtrlHandler(ConsoleHandler, TRUE)) {
+		std::cerr << "SetConsoleCtrlHandler 등록 실패" << std::endl;
+		return 1;
+	}
+
 	int choice = selectVersion();
 	std::shared_ptr<TCPServer> server;
 
 	switch (choice)
 	{
 		case 1:
-			server = std::shared_ptr<TCPServer>(new TCPMultithreadServer());
+			server = std::make_shared<TCPServer>(new TCPMultithreadServer());
 			break;
 		case 2:
-			server = std::shared_ptr<TCPServer>(new TCPSelectServer());
+			server = std::make_shared<TCPServer>(new TCPSelectServer());
 			break;
 		case 3:
-			server = std::shared_ptr<TCPServer>(new TCPPollServer());
-			// pollServer();
+			server = std::make_shared<TCPServer>(new TCPPollServer());
 			break;
 		case 4:
 			iocpServer();

@@ -34,6 +34,8 @@ void TCPMultithreadServer::Shutdown()
 
         for (int i = 0; i < clients.size(); i++)
         {
+            clients.erase(std::remove(clients.begin(), clients.end(), clients[i]), clients.end());
+            clientNames.erase(clients[i]);
             closesocket(clients[i]);
         }
     }
