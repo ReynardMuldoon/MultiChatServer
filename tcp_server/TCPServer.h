@@ -12,11 +12,12 @@ public:
 	virtual void Shutdown();
 
 protected:
-	SOCKET serverSocket;
+	SOCKET serverSocket = INVALID_SOCKET;
 	std::unordered_map<SOCKET, std::string> clientNames;
 	int port;
 
 	std::string GetNickname(SOCKET clientSocket);
+	virtual bool CreateServerSocket(int port);
 	virtual void Broadcast(const std::string& message, SOCKET sender) = 0;
 	virtual void RemoveClient(SOCKET clientSocket);
 };

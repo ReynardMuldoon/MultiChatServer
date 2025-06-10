@@ -34,21 +34,21 @@ int main(void)
 	}
 
 	int choice = selectVersion();
-	std::shared_ptr<TCPServer> server;
 
 	switch (choice)
 	{
 		case 1:
-			server = std::make_shared<TCPServer>(new TCPMultithreadServer());
+			server = std::make_shared<TCPMultithreadServer>();
 			break;
 		case 2:
-			server = std::make_shared<TCPServer>(new TCPSelectServer());
+			server = std::make_shared<TCPSelectServer>();
 			break;
 		case 3:
-			server = std::make_shared<TCPServer>(new TCPPollServer());
+			server = std::make_shared<TCPPollServer>();
 			break;
 		case 4:
-			iocpServer();
+			server = std::make_shared<TCPIOCPServer>();
+			// iocpServer();
 			break;
 	}
 

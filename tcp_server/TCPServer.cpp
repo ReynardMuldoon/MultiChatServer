@@ -10,31 +10,9 @@ bool TCPServer::Init(int port)
         return false;
     }
 
-    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSocket == INVALID_SOCKET) 
+    if (!CreateServerSocket(port))
     {
-        std::cerr << "소켓 생성 실패" << std::endl;
-        return false;
-    }
-
-    this->port = port;
-
-    sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(port);
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) 
-    {
-        std::cerr << "bind 실패" << std::endl;
-        closesocket(serverSocket);
-        return false;
-    }
-
-    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) 
-    {
-        std::cerr << "listen 실패" << std::endl;
-        closesocket(serverSocket);
+        std::cerr << "ServerSocket 생성 실패" << std::endl;
         return false;
     }
 
@@ -64,6 +42,39 @@ std::string TCPServer::GetNickname(SOCKET clientSocket)
     std::string nickname = buffer;
 
     return nickname;
+}
+
+bool TCPServer::CreateServerSocket(int port)
+{
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == INVALID_SOCKET)
+    {
+        std::cerr << "소켓 생성 실패" << std::endl;
+        return false;
+    }
+
+    this->port = port;
+
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port);
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+    {
+        std::cerr << "bind 실패" << std::endl;
+        closesocket(serverSocket);
+        return false;
+    }
+
+    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR)
+    {
+        std::cerr << "listen 실패" << std::endl;
+        closesocket(serverSocket);
+        return false;
+    }
+
+    return true;
 }
 
 
