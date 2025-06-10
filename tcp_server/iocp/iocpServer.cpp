@@ -3,6 +3,10 @@
 TCPIOCPServer::TCPIOCPServer() 
 {
     iocpHandle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+    if (iocpHandle == nullptr)
+    {
+        std::cerr << "CreateIoCompletionPort failed\n";
+    }
 }
 
 TCPIOCPServer::~TCPIOCPServer() 
@@ -17,7 +21,7 @@ bool TCPIOCPServer::Init(int port)
 
     for (int i = 0; i < WORKER_COUNT; ++i) 
     {
-        std::thread(&TCPIOCPServer::WorkerLoop, this).detach();
+        std::thread(&TCPIOCPServer::WorkThread, this).detach();
     }
 
     std::cout << "IOCP 서버 초기화 완료, 포트 " << port << "에서 대기 중..." << std::endl;
@@ -29,75 +33,203 @@ void TCPIOCPServer::Run()
     while (true) 
     {
         SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
-        if (clientSocket == INVALID_SOCKET) continue;
-
-        auto* context = new PerIOContext;
-        context->socket = clientSocket;
-        context->operation = 0;
-
-        CreateIoCompletionPort((HANDLE)clientSocket, iocpHandle, (ULONG_PTR)clientSocket, 0);
-
+        if (clientSocket == INVALID_SOCKET)
         {
-            std::lock_guard<std::mutex> lock(clients_mutex);
-            clients[clientSocket] = context;
+            std::cerr << "Accept Failed\n";
+            continue;
         }
 
+        // 클라이언트 소켓을 IOCP에 연결 
+        if (CreateIoCompletionPort((HANDLE)clientSocket, iocpHandle, (ULONG_PTR)clientSocket, 0) == nullptr)
+        {
+            std::cerr << "CreateIoCompletionPrt for client failed\n";
+            continue;
+        }
+
+        // 클라이언트 정보 추가 
+        {
+            std::lock_guard<std::mutex> lock(clientsMutex);
+            clients.push_back({ clientSocket, "", false });
+        }
+
+        PerIOContext* ioData = new PerIOContext();
+        ZeroMemory(&ioData->overlapped, sizeof(OVERLAPPED));
+        ioData->clientSocket = clientSocket;
+        ioData->opType = OP_RECV;
+
         DWORD flags = 0;
-        WSARecv(clientSocket, &context->wsaBuf, 1, nullptr, &flags, &context->overlapped, nullptr);
+        if (WSARecv(clientSocket, &ioData->wsaBuf, 1, nullptr, &flags, &ioData->overlapped, nullptr) == SOCKET_ERROR)
+        {
+            if (WSAGetLastError() != WSA_IO_PENDING)
+            {
+                RemoveClient(clientSocket);
+                delete ioData;
+            }
+        }
     }
 }
 
 void TCPIOCPServer::Shutdown()
 {
-    for (auto& [sock, ctx] : clients) 
-    {
-        delete ctx;
-    }
     if (iocpHandle) CloseHandle(iocpHandle);
-    for (auto& [sock, ctx] : clients) 
-    {
-        delete ctx;
-    }
-    if (iocpHandle) CloseHandle(iocpHandle);
-
     TCPServer::Shutdown();
 }
 
-void TCPIOCPServer::WorkerLoop()
+void TCPIOCPServer::WorkThread()
 {
     DWORD bytesTransferred;
     ULONG_PTR completionKey;
-    PerIOContext* context;
+    LPOVERLAPPED overlapped;
 
     while (true) 
     {
-        BOOL success = GetQueuedCompletionStatus(iocpHandle, &bytesTransferred, &completionKey, (LPOVERLAPPED*)&context, INFINITE);
+        BOOL result = GetQueuedCompletionStatus(
+            iocpHandle, &bytesTransferred, &completionKey, &overlapped, INFINITE
+        );
 
-        if (!success || bytesTransferred == 0) 
-        {
-            SOCKET sock = context->socket;
-            std::cout << "[IOCP] Client disconnected: " << sock << "\n";
-            {
-                std::lock_guard<std::mutex> lock(clients_mutex);
-                clients.erase(sock);
-                clientNames.erase(sock);
-            }
-            closesocket(sock);
-            delete context;
+        if (!overlapped) {
+            std::cerr << "GetQueuedCompletionStatus returned null overlapped\n";
             continue;
         }
 
-        context->buffer[bytesTransferred] = '\0';
-        std::string msg(context->buffer);
-        
-        std::string finalMsg = "A: " + msg;
-        Broadcast(finalMsg, context->socket);
-        std::cout << finalMsg << std::endl;
+        PerIOContext* ioData = (PerIOContext*)overlapped;
+        if (!result || bytesTransferred == 0) 
+        {
+            std::cout << "[IOCP] Client disconnected: " << ioData->clientSocket << "\n";
+            if (ioData->clientSocket != INVALID_SOCKET)
+            {
+                // 소켓 유효성 확인 
+                int optVal;
+                int optLen = sizeof(optVal);
+                if (getsockopt(ioData->clientSocket, SOL_SOCKET, SO_ERROR, (char*)&optVal, &optLen) == SOCKET_ERROR)
+                {
+                    std::cerr << "Invalid socket detected in WorkThread: " << ioData->clientSocket << "\n";
+                }
+                else
+                {
+                    RemoveClient(ioData->clientSocket);
+                }
+            }
+            // OP_SEND의 경우 동적 메모리 해제 
+            if (ioData->opType == OP_SEND)
+            {
+                delete[] ioData->wsaBuf.buf;
+            }
+            delete ioData;
+            continue;
+        }
 
-        context->operation = 0;
-        DWORD flags = 0;
-        context->wsaBuf.len = MAX_BUFFER;
-        WSARecv(context->socket, &context->wsaBuf, 1, nullptr, &flags, &context->overlapped, nullptr);
+        if (ioData->opType == OP_RECV)
+        {
+            if (bytesTransferred >= MAX_BUFFER) 
+            {
+                std::cerr << "Error: Received data size (" << bytesTransferred << ") exceeds MAX_BUFFER\n";
+                RemoveClient(ioData->clientSocket);
+                delete ioData;
+                continue;
+            }
+            ioData->buffer[bytesTransferred] = '\0';
+            bool isValidString = true;
+            for (DWORD i = 0; i < bytesTransferred; ++i) 
+            {
+                if (!std::isprint(static_cast<unsigned char>(ioData->buffer[i])) && ioData->buffer[i] != '\n' && ioData->buffer[i] != '\r') {
+                    isValidString = false;
+                    break;
+                }
+            }
+            if (!isValidString) 
+            {
+                std::cerr << "Error: Received invalid string data\n";
+                RemoveClient(ioData->clientSocket);
+                delete ioData;
+                continue;
+            }
+
+            std::string message(ioData->buffer);
+            std::cout << "[DEBUG] Received message: " << message << " from socket: " << ioData->clientSocket << "\n";
+
+            // currentClient 찾기
+            std::string broadcastMsg;
+            {
+                std::lock_guard<std::mutex> lock(clientsMutex);
+                ClientInfo* currentClient = nullptr;
+                for (auto& client : clients) {
+                    if (client.socket == ioData->clientSocket) {
+                        currentClient = &client;
+                        break;
+                    }
+                }
+
+                if (currentClient) {
+                    if (!currentClient->isNicknameSet) {
+                        currentClient->nickname = message;
+                        currentClient->isNicknameSet = true;
+                        broadcastMsg = "Welcome, " + message + "!\n";
+                    }
+                    else {
+                        broadcastMsg = currentClient->nickname + ": " + message + "\n";
+                    }
+                }
+                else {
+                    std::cerr << "Client not found for socket: " << ioData->clientSocket << "\n";
+                    delete ioData;
+                    continue;
+                }
+            }
+
+            // Broadcast 호출
+            if (!broadcastMsg.empty()) 
+            {
+                Broadcast(broadcastMsg, ioData->clientSocket);
+                std::cout << broadcastMsg;
+            }
+
+            // 다음 수신 작업 준비 
+            ZeroMemory(&ioData->overlapped, sizeof(OVERLAPPED));
+            ioData->wsaBuf.buf = ioData->buffer;
+            ioData->wsaBuf.len = MAX_BUFFER;
+            ioData->opType = OP_RECV;
+            DWORD flags = 0;
+            if (ioData->clientSocket != INVALID_SOCKET) 
+            {
+                // 소켓 유효성 확인
+                int optVal;
+                int optLen = sizeof(optVal);
+                if (getsockopt(ioData->clientSocket, SOL_SOCKET, SO_ERROR, (char*)&optVal, &optLen) == SOCKET_ERROR) 
+                {
+                    std::cerr << "Invalid socket detected for WSARecv: " << ioData->clientSocket << "\n";
+                    RemoveClient(ioData->clientSocket);
+                    delete ioData;
+                    continue;
+                }
+
+                int result = WSARecv(ioData->clientSocket, &ioData->wsaBuf, 1, nullptr, &flags, &ioData->overlapped, nullptr);
+                if (result == SOCKET_ERROR) {
+
+                    int error = WSAGetLastError();
+                    if (error != WSA_IO_PENDING) 
+                    {
+                        std::cerr << "WSARecv failed with error: " << error << "\n";
+                        RemoveClient(ioData->clientSocket);
+                        delete ioData;
+                        continue;
+                    }
+                }
+            }
+            else 
+            {
+                std::cerr << "Invalid client socket detected\n";
+                delete ioData;
+                continue;
+            }
+        }
+
+        else if (ioData->opType == OP_SEND)
+        {
+            std::cout << "[DEBUG] Sent message on socket: " << ioData->clientSocket << "\n";
+            delete[] ioData->wsaBuf.buf;
+            delete ioData;
+        }    
     }
 }
 
@@ -134,39 +266,71 @@ bool TCPIOCPServer::CreateServerSocket(int port)
     return true;
 }
 
-void TCPIOCPServer::RemoveClient(SOCKET clientSocket)
+void TCPIOCPServer::RemoveClient(SOCKET clientSocket) 
 {
-    std::string leaveMsg = "A has left the chat.\n";
-    Broadcast(leaveMsg, clientSocket);
-    std::cout << leaveMsg;
-
-    closesocket(clientSocket);
+    std::string leaveMsg;
+    {
+        std::lock_guard<std::mutex> lock(clientsMutex);
+        for (auto it = clients.begin(); it != clients.end(); ++it) 
+        {
+            if (it->socket == clientSocket) 
+            {
+                leaveMsg = it->nickname.empty() ? "A client" : it->nickname;
+                leaveMsg += " has left the chat.\n";
+                if (clientSocket != INVALID_SOCKET)
+                {
+                    closesocket(clientSocket);
+                    it->socket = INVALID_SOCKET;
+                }
+                clients.erase(it);
+                break;
+            }
+        }
+    }
+    if (!leaveMsg.empty()) {
+        Broadcast(leaveMsg, INVALID_SOCKET); // sender를 INVALID_SOCKET으로 설정하여 자신에게 보내지 않도록
+        std::cout << leaveMsg;
+    }
 }
 
-void TCPIOCPServer::Broadcast(const std::string& message, SOCKET sender)
-{
-    std::lock_guard<std::mutex> lock(clients_mutex);
-
-    for (auto& [sock, ctx] : clients) 
+void TCPIOCPServer::Broadcast(const std::string& message, SOCKET sender) {
+    // clients 복사
+    std::vector<ClientInfo> clientsCopy;
     {
-        if (sock == sender) continue;
+        std::lock_guard<std::mutex> lock(clientsMutex);
+        clientsCopy = clients;
+    }
 
-        // 메시지를 PerIOContext 내에 보관하여 WSASend가 끝날 때까지 안전하게 유지
-        std::shared_ptr<std::string> pendingMessage = std::make_shared<std::string>(message);
+    // 복사본을 사용하여 브로드캐스트
+    for (const auto& client : clientsCopy) {
+        if (client.socket == sender || client.socket == INVALID_SOCKET) continue;
 
-        // 비동기 송신 준비
-        ctx->wsaBuf.buf = const_cast<char*>(pendingMessage->c_str());
-        ctx->wsaBuf.len = static_cast<ULONG>(pendingMessage->size());
+        // 소켓 유효성 확인
+        int optVal;
+        int optLen = sizeof(optVal);
+        if (getsockopt(client.socket, SOL_SOCKET, SO_ERROR, (char*)&optVal, &optLen) == SOCKET_ERROR) {
+            std::cerr << "Invalid socket detected: " << client.socket << "\n";
+            RemoveClient(client.socket);
+            continue;
+        }
 
-        memset(&ctx->overlapped, 0, sizeof(OVERLAPPED));
-        ctx->operation = 1; // SEND
+        PerIOContext* ioData = new PerIOContext();
+        ZeroMemory(&ioData->overlapped, sizeof(OVERLAPPED));
+        ioData->wsaBuf.buf = new char[message.size() + 1];
+        ioData->wsaBuf.len = message.size() + 1;
+        strcpy_s(ioData->wsaBuf.buf, message.size() + 1, message.c_str());
+        ioData->opType = OP_SEND;
+        ioData->clientSocket = client.socket;
 
-        // WSASend 요청 - 비동기 방식이므로 버퍼가 유효해야 함
-        int result = WSASend(sock, &ctx->wsaBuf, 1, nullptr, 0, &ctx->overlapped, nullptr);
-        if (result == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING) 
-        {
-            std::cerr << "[Broadcast] WSASend error on socket " << sock << ": " << WSAGetLastError() << "\n";
-            RemoveClient(sock);
+        DWORD flags = 0;
+        if (WSASend(client.socket, &ioData->wsaBuf, 1, nullptr, flags, &ioData->overlapped, nullptr) == SOCKET_ERROR) {
+            int error = WSAGetLastError();
+            if (error != WSA_IO_PENDING) {
+                std::cerr << "WSASend failed with error: " << error << "\n";
+                delete[] ioData->wsaBuf.buf;
+                delete ioData;
+                RemoveClient(client.socket);
+            }
         }
     }
 }

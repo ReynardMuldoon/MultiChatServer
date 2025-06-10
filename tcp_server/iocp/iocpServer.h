@@ -24,19 +24,19 @@ protected:
     virtual bool CreateServerSocket(int port);
     void RemoveClient(SOCKET clientSocket);
     void Broadcast(const std::string& message, SOCKET sender) override;
-    void WorkerLoop();
 
 private:
     static constexpr int MAX_BUFFER = 1024;
     static constexpr int WORKER_COUNT = 4;
 
+    enum OperationType { OP_RECV, OP_SEND };
+
     struct PerIOContext {
-        OVERLAPPED overlapped{};
+        OVERLAPPED overlapped;
         WSABUF wsaBuf;
         char buffer[MAX_BUFFER];
-        SOCKET socket = INVALID_SOCKET;
-        DWORD bytesReceived = 0;
-        int operation = 0; // 0 = RECV, 1 = SEND
+        OperationType opType;
+        SOCKET clientSocket = INVALID_SOCKET;
 
         PerIOContext() {
             wsaBuf.buf = buffer;
@@ -44,8 +44,16 @@ private:
         }
     };
 
+    struct ClientInfo {
+        SOCKET socket;
+        std::string nickname;
+        bool isNicknameSet;
+    };
+
     HANDLE iocpHandle = nullptr;
 
-    std::mutex clients_mutex;
-    std::unordered_map<SOCKET, PerIOContext*> clients;
+    std::vector<ClientInfo> clients;
+    std::mutex clientsMutex;
+
+    void WorkThread();
 };
